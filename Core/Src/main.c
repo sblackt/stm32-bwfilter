@@ -26,6 +26,8 @@
 #include <stdio.h>
 #include "ssd1306_fonts.h"
 #include "arm_math.h"
+#include <stdbool.h>  // ✅ Enables `bool`, `true`, and `false`
+
 
 /* USER CODE END Includes */
 
@@ -540,6 +542,7 @@ void Update_Display(void) {
 
 void HAL_GPIO_EXTI_Callback(uint16_t GPIO_Pin) {
     static uint32_t press_start_time = 0;
+    static bool button_held = false;  // ✅ Track if button is held to prevent double-triggering
     uint32_t current_time = HAL_GetTick();
 
     // ✅ Handle Encoder Rotation (PB13 or PB14)
@@ -550,33 +553,32 @@ void HAL_GPIO_EXTI_Callback(uint16_t GPIO_Pin) {
 
     // ✅ Handle Button Press (PB12)
     if (GPIO_Pin == GPIO_PIN_12) {
-        // ✅ If the button is pressed (falling edge detected)
         if (HAL_GPIO_ReadPin(GPIOB, GPIO_PIN_12) == GPIO_PIN_RESET) {
-            press_start_time = current_time;  // ✅ Store time when press started
+            // ✅ Button just got pressed (FALLING EDGE)
+            press_start_time = current_time;
+            button_held = false;  // ✅ Reset hold status
         }
-        // ✅ If the button is released (rising edge detected)
         else {
+            // ✅ Button released (RISING EDGE)
             uint32_t press_duration = current_time - press_start_time;
 
-            // ✅ Long Press Detected (1s)
-            if (press_duration > 1000) {
+            // ✅ Long Press Detected (1s) → Jump to Min/Max BW
+            if (press_duration > 1000 && !button_held) {
                 if (setting_mode == 0) {  // ✅ If in Bandwidth mode
-                    if (bandwidth < (MAX_BANDWIDTH + MIN_BANDWIDTH) / 2) {
-                        bandwidth = MAX_BANDWIDTH;  // ✅ Jump to max
-                    } else {
-                        bandwidth = MIN_BANDWIDTH;  // ✅ Jump to min
-                    }
+                    bandwidth = (bandwidth < (MAX_BANDWIDTH + MIN_BANDWIDTH) / 2) ? MAX_BANDWIDTH : MIN_BANDWIDTH;
                     Update_Display();
                 }
+                button_held = true;  // ✅ Prevent double-triggers
             }
-            // ✅ Short Press Detected
-            else if (press_duration > 150) {
+            // ✅ Short Press Detected (Fast toggle)
+            else if (press_duration > 50 && press_duration < 300) {
                 setting_mode = !setting_mode;  // ✅ Toggle between BW and CF pages
                 Update_Display();  // ✅ Immediately update OLED
             }
         }
     }
 }
+
 
 
 
